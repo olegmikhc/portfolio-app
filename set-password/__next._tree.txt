@@ -1,4 +1,4 @@
 :HL["/portfolio-app/_next/static/css/95e403960ded025d.css","style"]
 :HL["/portfolio-app/_next/static/css/449c6331bd77b070.css","style"]
 :HL["/portfolio-app/_next/static/css/d300f20eb341858d.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"set-password","param":null,"prefetchHints":4192,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}}}},"staleTime":300,"buildId":"PdfSlk1EqRmx8Ve-hJ4ck"}
+0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"set-password","param":null,"prefetchHints":4192,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}}}},"staleTime":300,"buildId":"7O5q0umnd6gpkWCdn0kSq"}
