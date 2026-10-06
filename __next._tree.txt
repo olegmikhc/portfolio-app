@@ -1,4 +1,4 @@
 :HL["/portfolio-app/_next/static/css/95e403960ded025d.css","style"]
 :HL["/portfolio-app/_next/static/css/449c6331bd77b070.css","style"]
 :HL["/portfolio-app/_next/static/css/8c502caa8ddb6dd2.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}},"staleTime":300,"buildId":"emcZjsI4YxJVm_CuXE4vK"}
+0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}},"staleTime":300,"buildId":"AsynY9PDo-GkqH7Ql8uIB"}
