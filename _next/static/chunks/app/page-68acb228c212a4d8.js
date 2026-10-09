@@ -75,14 +75,14 @@ async function l(path,options={}){
  if(path!=="/api/workspace")return portfolioRequestOnce(path,options);
  if(!workspaceReadPromise)workspaceReadPromise=(async()=>{
   for(let attempt=0;attempt<3;attempt++){
-   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+   const controller=new AbortController(),timeoutError=new Error("Рабочая база не ответила за 45 секунд. Попробуйте повторить загрузку."),timer=setTimeout(()=>controller.abort(timeoutError),45000);
    try{
     const response=await portfolioRequestOnce(path,{...options,signal:controller.signal});
     if([429,502,503,504].includes(response.status)&&attempt<2){await new Promise(resolve=>setTimeout(resolve,(attempt+1)*1500));continue}
     workspaceHealthy=false;
-    if(response.ok){try{const payload=await response.clone().json();workspaceHealthy=Array.isArray(payload.rows)&&!!payload.user}catch{}}
+    if(response.ok){try{const payload=await response.clone().json();workspaceHealthy=Array.isArray(payload.rows)&&!!payload.user}catch(error){if(controller.signal.aborted)throw controller.signal.reason||timeoutError}}
     return response;
-   }catch(error){workspaceHealthy=false;if(attempt===2)throw error;await new Promise(resolve=>setTimeout(resolve,(attempt+1)*1500))}
+   }catch(error){workspaceHealthy=false;if(controller.signal.aborted)throw controller.signal.reason||timeoutError;if(attempt===2)throw error;await new Promise(resolve=>setTimeout(resolve,(attempt+1)*1500))}
    finally{clearTimeout(timer)}
   }
  })().finally(()=>{workspaceReadPromise=null});
