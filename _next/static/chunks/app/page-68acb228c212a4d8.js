@@ -220,7 +220,8 @@ function StagePaymentRow({stage,current,payments,records,onSelect}){
  const complete=data.status==="Завершён";
  const status=complete?"Выполнен":current?"Текущий этап":data.status==="Не начат"?"Не начат":"Статус уточняется";
  const period=data.plannedPeriodText||(data.plannedDate?constructionDateText(data.plannedDate):data.month?w(data.month):"—");
- const total=payments.reduce((sum,item)=>sum+item.remainder,0);
+ const total=payments.reduce((sum,item)=>sum+(item.additionalCondition?0:item.remainder),0);
+ const conditional=payments.reduce((sum,item)=>sum+(item.additionalCondition?item.remainder:0),0);
  const header=[
   n.jsx("span",{className:"stage-payment-number",children:"Этап "+data.number},"number"),
   n.jsx("strong",{className:"stage-payment-title",children:data.name},"title"),
@@ -231,19 +232,21 @@ function StagePaymentRow({stage,current,payments,records,onSelect}){
   n.jsx("span",{className:"stage-payment-status stage-payment-status-"+(complete?"done":current?"current":"default"),children:status},"status"),
   n.jsxs("span",{className:"stage-payment-balance",children:[
    n.jsx("small",{children:payments.length?(complete?"Остаток после выполнения":"К получению при выполнении"):"По договорам"}),
-   n.jsx("strong",{children:payments.length?g(total/100)+" USD":"Уточняется"})
+   n.jsx("strong",{children:payments.length?g(total/100)+" USD":"Уточняется"}),
+   conditional>0&&n.jsx("small",{children:g(conditional/100)+" USD с дополнительным условием"})
   ]},"total")
  ];
  return payments.length?n.jsxs("details",{className:"stage-payment-item",children:[
   n.jsx("summary",{className:"stage-payment-line",children:header}),
-  n.jsx("div",{className:"stage-payment-deals",children:payments.map(({payment,deal,unit,remainder})=>n.jsxs("button",{
+  n.jsx("div",{className:"stage-payment-deals",children:payments.map(({payment,deal,unit,remainder,forecast})=>n.jsxs("button",{
    type:"button",className:"related",onClick:()=>onSelect(deal),children:[
     n.jsxs("span",{children:[projectFinanceUnitLabel(unit)+" · "+projectFinancePerson(records,deal.data.client),n.jsx("small",{children:deal.data.name}),
-     n.jsx("small",{children:"План по договору: "+(String(payment.data.notes||"").match(/Договорный план:\s*([^;\n]+)/)?.[1].trim()||"срок не указан")})
+     forecast?n.jsx("small",{children:forecast.details+" · Сверено "+constructionDateText(forecast.asOf)}):
+      n.jsx("small",{children:"План по договору: "+(String(payment.data.notes||"").match(/Договорный план:\s*([^;\n]+)/)?.[1].trim()||"срок не указан")})
     ]}),
     n.jsx("b",{children:g(remainder/100)+" USD"})
    ]
-  },payment.id))})
+  },forecast?.id||payment.id))})
  ]}):n.jsx("div",{className:"stage-payment-line",children:header});
 }
 function FinanceStageComparison({review,projectId,groups}){
@@ -275,10 +278,19 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
  const today=usePortfolioBaliDate();
  const snapshot=sourceOverdueRecord(rows);
  const sourceRows=sourceOverdueRowsOn(snapshot,today).filter(sourceOverdueActive);
- const stageFinanceReview=rows.find(row=>row.kind==="sourceSummary"&&row.data.sourceFileId==="1XSnB7VtrumKS61s52-DxRcJwsaYTYHPA1_j2LqE_5Bk"&&row.data.sourceTab==="Лист1")?.data.stageFinanceReview;
+ const sourceSummary=rows.find(row=>row.kind==="sourceSummary"&&row.data.sourceFileId==="1XSnB7VtrumKS61s52-DxRcJwsaYTYHPA1_j2LqE_5Bk"&&row.data.sourceTab==="Лист1")?.data;
+ const stageFinanceReview=sourceSummary?.stageFinanceReview;
+ const evidence=sourceSummary?.stageContractForecast;
+ const verified=evidence?.schemaVersion===1&&Array.isArray(evidence.entries)?evidence:null;
  const financier=stageFinanceReview?.schemaVersion===1&&stageFinanceReview.sourceFileId==="1XSnB7VtrumKS61s52-DxRcJwsaYTYHPA1_j2LqE_5Bk"&&Array.isArray(stageFinanceReview.projects)?stageFinanceReview:null;
  const {records,receiptsByPayment}=projectFinanceIndex(rows);
  const linked=new Map();
+ const paymentRemainder=payment=>{
+  const paid=(receiptsByPayment.get(payment.id)||[])
+   .filter(receipt=>receipt.data.status==="Подтверждено"&&["Деньги","Зачёт","Прощение долга"].includes(receipt.data.method||"Деньги"))
+   .reduce((sum,receipt)=>sum+Math.round(budgetAmount(receipt)*100),0);
+  return Math.max(0,Math.round(budgetAmount(payment)*100)-paid);
+ };
  for(const payment of rows){
   if(payment.kind!=="payment"||payment.data.rule!=="Этап"||!payment.data.stage||payment.data.purpose==="Штраф"||["К перевложению","Перевложены в новый Green Village"].includes(payment.data.status))continue;
   const stage=records.get(payment.data.stage),deal=records.get(payment.data.deal);
@@ -286,18 +298,33 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
   const unit=records.get(deal.data.unit),stageBlock=records.get(stage.data.block),unitBlock=records.get(unit?.data.block);
   const stageProject=stage.data.project||stageBlock?.data.project,unitProject=unit?.data.project||unitBlock?.data.project;
   if(!stageProject||stageProject!==unitProject||(stage.data.block&&stage.data.block!==unit?.data.block))continue;
-  const paid=(receiptsByPayment.get(payment.id)||[])
-   .filter(receipt=>receipt.data.status==="Подтверждено"&&["Деньги","Зачёт","Прощение долга"].includes(receipt.data.method||"Деньги"))
-   .reduce((sum,receipt)=>sum+Math.round(budgetAmount(receipt)*100),0);
-  const remainder=Math.max(0,Math.round(budgetAmount(payment)*100)-paid);
+  const remainder=paymentRemainder(payment);
   if(!linked.has(stage.id))linked.set(stage.id,[]);
   linked.get(stage.id).push({payment,deal,unit,remainder});
+ }
+ const ids=new Set();
+ for(const entry of verified?.entries||[]){
+  if(!entry.id||ids.has(entry.id)||!Number.isSafeInteger(entry.cents)||entry.cents<0)continue;
+  ids.add(entry.id);
+  const stage=records.get(entry.stageId),deal=records.get(entry.dealId);
+  if(stage?.kind!=="stage"||deal?.kind!=="deal"||deal.data.status!=="Действует"||deal.data.saleType==="Перепродажа инвестора")continue;
+  const unit=records.get(deal.data.unit);
+  const stageProject=stage.data.project||records.get(stage.data.block)?.data.project;
+  const unitProject=unit?.data.project||records.get(unit?.data.block)?.data.project;
+  if(!stageProject||stageProject!==unitProject||(stage.data.block&&stage.data.block!==unit?.data.block))continue;
+  if(!linked.has(stage.id))linked.set(stage.id,[]);
+  const items=linked.get(stage.id),sameDeal=items.filter(item=>item.deal.id===deal.id&&!item.forecast);
+  const payment=entry.paymentId?records.get(entry.paymentId):null;
+  if(entry.paymentId&&(payment?.kind!=="payment"||payment.data.deal!==deal.id||["К перевложению","Перевложены в новый Green Village"].includes(payment.data.status)))continue;
+  if(sameDeal.length)continue;
+  const remainder=payment?Math.min(entry.cents,paymentRemainder(payment)):entry.cents;
+  items.push({payment,deal,unit,remainder,additionalCondition:entry.additionalCondition,forecast:{...entry,asOf:verified.asOf}});
  }
  const projects=rows.filter(project=>project.kind==="project"&&project.data.catalogExcluded!=="Да"&&project.data.recordType!=="Исторический")
   .map(project=>{
    const status=getProjectStatus(project),groups=constructionForProject(project);
    const entries=groups.flatMap(group=>group.stages).flatMap(stage=>linked.get(stage.id)||[]);
-   const balance=entries.reduce((sum,item)=>sum+item.remainder,0);
+   const balance=entries.reduce((sum,item)=>sum+(item.additionalCondition?0:item.remainder),0);
    return {project,status,groups,balance,hasLinks:entries.length>0};
   })
   .sort((a,b)=>a.project.data.name.localeCompare(b.project.data.name,"ru"));
@@ -331,6 +358,9 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
    ]}),
    n.jsxs("div",{className:"stage-payment-project-groups",children:[
     n.jsx(FinanceStageComparison,{review:financier,projectId:project.id,groups}),
+    (verified?.unsettled||[]).filter(item=>item.projectId===project.id).map(item=>n.jsxs("p",{className:"stage-finance-review-flag",children:[
+     n.jsx("strong",{children:"Требуется уточнить этап · "+g(item.cents/100)+" USD. "}),item.details
+    ]},item.id)),
     ...(groups.length?groups.map(group=>n.jsxs("section",{className:"stage-payment-block",children:[
     n.jsx("h3",{children:group.label}),
     ...group.stages.map(stage=>n.jsx(StagePaymentRow,{stage,current:group.current.includes(stage),payments:linked.get(stage.id)||[],records,onSelect},stage.id))
