@@ -277,7 +277,6 @@ function FinanceStageComparison({review,projectId,groups}){
 function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStatus}){
  const today=usePortfolioBaliDate();
  const snapshot=sourceOverdueRecord(rows);
- const sourceRows=sourceOverdueRowsOn(snapshot,today).filter(sourceOverdueActive);
  const sourceSummary=rows.find(row=>row.kind==="sourceSummary"&&row.data.sourceFileId==="1XSnB7VtrumKS61s52-DxRcJwsaYTYHPA1_j2LqE_5Bk"&&row.data.sourceTab==="Лист1")?.data;
  const stageFinanceReview=sourceSummary?.stageFinanceReview;
  const evidence=sourceSummary?.stageContractForecast;
@@ -320,9 +319,25 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
   const remainder=payment?Math.min(entry.cents,paymentRemainder(payment)):entry.cents;
   items.push({payment,deal,unit,remainder,additionalCondition:entry.additionalCondition,forecast:{...entry,asOf:verified.asOf}});
  }
- const projects=rows.filter(project=>project.kind==="project"&&project.data.catalogExcluded!=="Да"&&project.data.recordType!=="Исторический")
-  .map(project=>{
-   const status=getProjectStatus(project),groups=constructionForProject(project);
+ const projectStatuses=rows.filter(project=>project.kind==="project"&&project.data.catalogExcluded!=="Да"&&project.data.recordType!=="Исторический")
+  .map(project=>({project,status:getProjectStatus(project)}));
+ const built=projectStatuses.filter(({status})=>status.tone==="built");
+ const builtIds=new Set(built.map(({project})=>project.id));
+ const nameKey=value=>String(value||"").trim().toLowerCase().replace(/[\s·–—-]+/g," ");
+ const builtNames=built.flatMap(({project})=>[project.data.name,project.data.sourceProjectName]).map(nameKey).filter(Boolean);
+ const belongsToCurrentConstruction=row=>{
+  const projects=(row.typedUnitIds||[]).map(id=>{
+   const unit=records.get(id);
+   return unit?.data.project||records.get(unit?.data.block)?.data.project;
+  }).filter(Boolean);
+  if(projects.length)return projects.some(id=>!builtIds.has(id));
+  const unitName=nameKey(row.projectUnit);
+  return !builtNames.some(name=>unitName===name||unitName.startsWith(name+" "));
+ };
+ const sourceRows=sourceOverdueRowsOn(snapshot,today).filter(sourceOverdueActive).filter(belongsToCurrentConstruction);
+ const projects=projectStatuses.filter(({status})=>status.tone!=="built")
+  .map(({project,status})=>{
+   const groups=constructionForProject(project);
    const entries=groups.flatMap(group=>group.stages).flatMap(stage=>linked.get(stage.id)||[]);
    const balance=entries.reduce((sum,item)=>sum+(item.additionalCondition?0:item.remainder),0);
    return {project,status,groups,balance,hasLinks:entries.length>0};
@@ -370,10 +385,10 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
   n.jsx("h2",{className:"stage-payment-source-heading",children:"Строки Финансиста для проверки"}),
   sourceList("Этапы и отсрочки из Финансиста",waiting,false),
   sourceList("Нужно сверить договор или график",review,true),
-  snapshot&&n.jsx(SourceOverdueSummary,{snapshot,inStagePayments:true})
+  snapshot&&n.jsx(SourceOverdueSummary,{snapshot,inStagePayments:true,sourceRowFilter:belongsToCurrentConstruction})
  ]});
 }
-function SourceOverdueSummary({snapshot,inStagePayments=false}){const[open,setOpen]=C.useState(false),[partition,setPartition]=C.useState('active'),[manual,setManual]=C.useState('Все причины'),[original,setOriginal]=C.useState('Все исходные статусы');const day=usePortfolioBaliDate(),active=sourceOverdueRowsOn(snapshot,day).filter(sourceOverdueActive),all=active.filter(row=>row.classification==='sourceDailyDateAndTypedOutstandingAligned'),coveredThrough=snapshot.data.coveredThrough||snapshot.data.asOfDate,rawStatuses=[...new Set(all.flatMap(r=>(r.originalDZComments||[]).flatMap(c=>[c.exactQuotes?.status,c.exactQuotes?.additionalStatus])).map(x=>String(x||'').trim()).filter(Boolean))].sort();const visible=all.filter(r=>partition==='active'||r.classification===partition).filter(r=>manual==='Все причины'||sourceOverdueAnnotation(snapshot,r.key).reason===manual).filter(r=>original==='Все исходные статусы'||(r.originalDZComments||[]).some(c=>[c.exactQuotes?.status,c.exactQuotes?.additionalStatus].some(x=>String(x||'').trim()===original)));function choose(k){setPartition(k);setOpen(true)}const details=open?n.jsxs('div',{children:[n.jsx('div',{style:{display:'flex',flexWrap:'wrap',gap:10,margin:'14px 0'},children:[n.jsx('select',{'aria-label':'Раздел сверки',value:partition,onChange:e=>setPartition(e.target.value),children:[n.jsx('option',{value:'active',children:'Платежи с проверенным графиком'},'active')]}),n.jsx('select',{'aria-label':'Причина, указанная вручную',value:manual,onChange:e=>setManual(e.target.value),children:['Все причины',...sourceOverdueManualReasons].map(k=>n.jsx('option',{value:k,children:k},k))}),n.jsx('select',{'aria-label':'Исходный статус ДЗ',value:original,onChange:e=>setOriginal(e.target.value),children:['Все исходные статусы',...rawStatuses].map(k=>n.jsx('option',{value:k,children:k},k))})]}),n.jsx('p',{children:'Показано: '+visible.length+' · '+g(sourceOverdueTotal(visible))+' USD'}),n.jsx('div',{className:'source-finance-table-scroll',children:n.jsxs('table',{className:'source-finance-table',children:[n.jsx('thead',{children:n.jsx('tr',{children:['Клиент','Проект / юнит','Плановая дата','Неоплачено','Проверка','Исходные пометки','Причина и комментарий'].map(x=>n.jsx('th',{children:x},x))})}),n.jsx('tbody',{children:visible.map(r=>n.jsx(SourceOverdueLine,{row:r,snapshot},snapshot.version+':'+r.key))})]})}),!visible.length&&n.jsx('p',{children:'По выбранным условиям строк нет.'})]}):null;
+function SourceOverdueSummary({snapshot,inStagePayments=false,sourceRowFilter}){const[open,setOpen]=C.useState(false),[partition,setPartition]=C.useState('active'),[manual,setManual]=C.useState('Все причины'),[original,setOriginal]=C.useState('Все исходные статусы');const day=usePortfolioBaliDate(),active=sourceOverdueRowsOn(snapshot,day).filter(row=>sourceOverdueActive(row)&&(!sourceRowFilter||sourceRowFilter(row))),all=active.filter(row=>row.classification==='sourceDailyDateAndTypedOutstandingAligned'),coveredThrough=snapshot.data.coveredThrough||snapshot.data.asOfDate,rawStatuses=[...new Set(all.flatMap(r=>(r.originalDZComments||[]).flatMap(c=>[c.exactQuotes?.status,c.exactQuotes?.additionalStatus])).map(x=>String(x||'').trim()).filter(Boolean))].sort();const visible=all.filter(r=>partition==='active'||r.classification===partition).filter(r=>manual==='Все причины'||sourceOverdueAnnotation(snapshot,r.key).reason===manual).filter(r=>original==='Все исходные статусы'||(r.originalDZComments||[]).some(c=>[c.exactQuotes?.status,c.exactQuotes?.additionalStatus].some(x=>String(x||'').trim()===original)));function choose(k){setPartition(k);setOpen(true)}const details=open?n.jsxs('div',{children:[n.jsx('div',{style:{display:'flex',flexWrap:'wrap',gap:10,margin:'14px 0'},children:[n.jsx('select',{'aria-label':'Раздел сверки',value:partition,onChange:e=>setPartition(e.target.value),children:[n.jsx('option',{value:'active',children:'Платежи с проверенным графиком'},'active')]}),n.jsx('select',{'aria-label':'Причина, указанная вручную',value:manual,onChange:e=>setManual(e.target.value),children:['Все причины',...sourceOverdueManualReasons].map(k=>n.jsx('option',{value:k,children:k},k))}),n.jsx('select',{'aria-label':'Исходный статус ДЗ',value:original,onChange:e=>setOriginal(e.target.value),children:['Все исходные статусы',...rawStatuses].map(k=>n.jsx('option',{value:k,children:k},k))})]}),n.jsx('p',{children:'Показано: '+visible.length+' · '+g(sourceOverdueTotal(visible))+' USD'}),n.jsx('div',{className:'source-finance-table-scroll',children:n.jsxs('table',{className:'source-finance-table',children:[n.jsx('thead',{children:n.jsx('tr',{children:['Клиент','Проект / юнит','Плановая дата','Неоплачено','Проверка','Исходные пометки','Причина и комментарий'].map(x=>n.jsx('th',{children:x},x))})}),n.jsx('tbody',{children:visible.map(r=>n.jsx(SourceOverdueLine,{row:r,snapshot},snapshot.version+':'+r.key))})]})}),!visible.length&&n.jsx('p',{children:'По выбранным условиям строк нет.'})]}):null;
 if(inStagePayments)return n.jsxs("details",{
  className:"panel stage-payment-review attention",open,onToggle:event=>setOpen(event.currentTarget.open),children:[
   n.jsxs("summary",{children:[
