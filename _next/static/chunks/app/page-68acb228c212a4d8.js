@@ -359,7 +359,7 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
    n.jsxs("div",{className:"stage-payment-project-groups",children:[
     n.jsx(FinanceStageComparison,{review:financier,projectId:project.id,groups}),
     (verified?.unsettled||[]).filter(item=>item.projectId===project.id).map(item=>n.jsxs("p",{className:"stage-finance-review-flag",children:[
-     n.jsx("strong",{children:"Требуется уточнить этап · "+g(item.cents/100)+" USD. "}),item.details
+     n.jsx("strong",{children:(item.label||"Требуется уточнить этап")+" · "+g(item.cents/100)+" USD. "}),item.details
     ]},item.id)),
     ...(groups.length?groups.map(group=>n.jsxs("section",{className:"stage-payment-block",children:[
     n.jsx("h3",{children:group.label}),
