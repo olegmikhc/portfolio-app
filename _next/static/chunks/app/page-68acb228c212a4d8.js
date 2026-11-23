@@ -229,7 +229,10 @@ function StagePaymentRow({stage,current,payments,records,onSelect}){
    complete&&n.jsx("span",{children:data.completedDate?"Выполнен "+constructionDateText(data.completedDate):"Дата выполнения не указана"})
   ]},"dates"),
   n.jsx("span",{className:"stage-payment-status stage-payment-status-"+(complete?"done":current?"current":"default"),children:status},"status"),
-  total>0&&n.jsx("strong",{className:"stage-payment-balance",children:g(total/100)+" USD"},"total")
+  n.jsxs("span",{className:"stage-payment-balance",children:[
+   n.jsx("small",{children:payments.length?(complete?"Остаток после выполнения":"К получению при выполнении"):"По договорам"}),
+   n.jsx("strong",{children:payments.length?g(total/100)+" USD":"Уточняется"})
+  ]},"total")
  ];
  return payments.length?n.jsxs("details",{className:"stage-payment-item",children:[
   n.jsx("summary",{className:"stage-payment-line",children:header}),
@@ -287,17 +290,16 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
    .filter(receipt=>receipt.data.status==="Подтверждено"&&["Деньги","Зачёт","Прощение долга"].includes(receipt.data.method||"Деньги"))
    .reduce((sum,receipt)=>sum+Math.round(budgetAmount(receipt)*100),0);
   const remainder=Math.max(0,Math.round(budgetAmount(payment)*100)-paid);
-  if(!remainder)continue;
   if(!linked.has(stage.id))linked.set(stage.id,[]);
   linked.get(stage.id).push({payment,deal,unit,remainder});
  }
- const projects=rows.filter(project=>project.kind==="project"&&project.data.recordType!=="Исторический"&&!/green village|грин вил/i.test(project.data.name))
+ const projects=rows.filter(project=>project.kind==="project"&&project.data.catalogExcluded!=="Да"&&project.data.recordType!=="Исторический")
   .map(project=>{
    const status=getProjectStatus(project),groups=constructionForProject(project);
-   const balance=groups.flatMap(group=>group.stages).flatMap(stage=>linked.get(stage.id)||[]).reduce((sum,item)=>sum+item.remainder,0);
-   return {project,status,groups,balance};
+   const entries=groups.flatMap(group=>group.stages).flatMap(stage=>linked.get(stage.id)||[]);
+   const balance=entries.reduce((sum,item)=>sum+item.remainder,0);
+   return {project,status,groups,balance,hasLinks:entries.length>0};
   })
-  .filter(({project,status,groups,balance})=>status.tone==="building"||status.tone==="partial"||(status.tone!=="built"&&groups.length>0)||balance>0||financier?.projects.some(([id])=>id===project.id))
   .sort((a,b)=>a.project.data.name.localeCompare(b.project.data.name,"ru"));
  const waiting=sourceRows.filter(row=>row.classification==="awaitingConditionsOrApprovedDates");
  const review=sourceRows.filter(row=>row.classification==="awaitingReconciliation");
@@ -316,25 +318,25 @@ function StagePaymentsPilot({rows,onSelect,constructionForProject,getProjectStat
  return n.jsxs("section",{className:"stage-payments-pilot",children:[
   n.jsxs("div",{className:"stage-payments-intro",children:[
    n.jsx("h2",{children:"Проекты и этапы"}),
-   n.jsx("p",{className:"source-finance-context",children:"Сроки этапов — из графика строительства. Суммы — остатки платежей, уже связанных с конкретным этапом в карточках договоров."}),
+   n.jsx("p",{className:"source-finance-context",children:"В каждом этапе показан остаток платежей, связанных с ним по договорам. Раскройте этап, чтобы увидеть клиентов и суммы."}),
    n.jsx("a",{className:"record-link",href:"https://docs.google.com/spreadsheets/d/1XSnB7VtrumKS61s52-DxRcJwsaYTYHPA1_j2LqE_5Bk/edit#gid=0",target:"_blank",rel:"noopener noreferrer",children:"Финансист · Лист1 ↗"})
   ]}),
-  projects.length?projects.map(({project,status,groups,balance})=>n.jsxs("details",{className:"panel stage-payment-project",children:[
+  projects.length?projects.map(({project,status,groups,balance,hasLinks})=>n.jsxs("details",{className:"panel stage-payment-project",children:[
    n.jsxs("summary",{children:[
     n.jsxs("span",{className:"stage-payment-project-name",children:[n.jsx("strong",{children:project.data.name}),n.jsx("small",{children:status.label})]}),
     n.jsxs("span",{className:"stage-payment-project-total",children:[
-     balance>0?n.jsxs(n.Fragment,{children:[n.jsx("strong",{children:g(balance/100)+" USD"}),n.jsx("small",{children:"Остаток по привязанным платежам"})]}):n.jsx("small",{children:"Нет привязанных остатков"})
+     hasLinks?n.jsxs(n.Fragment,{children:[n.jsx("strong",{children:g(balance/100)+" USD"}),n.jsx("small",{children:"К получению по этапам"})]}):n.jsx("small",{children:"Договорные привязки уточняются"})
     ]}),
-    n.jsx(ep.A,{size:18,"aria-hidden":true})
+    n.jsx("span",{className:"stage-project-disclosure","aria-hidden":true,children:n.jsx(ep.A,{size:20})})
    ]}),
    n.jsxs("div",{className:"stage-payment-project-groups",children:[
     n.jsx(FinanceStageComparison,{review:financier,projectId:project.id,groups}),
     ...(groups.length?groups.map(group=>n.jsxs("section",{className:"stage-payment-block",children:[
     n.jsx("h3",{children:group.label}),
     ...group.stages.map(stage=>n.jsx(StagePaymentRow,{stage,current:group.current.includes(stage),payments:linked.get(stage.id)||[],records,onSelect},stage.id))
-   ]},group.id)):[n.jsx("p",{children:"График проекта пока не внесён."},"no-schedule")])
+   ]},group.id)):[n.jsx("p",{children:"График этапов пока не внесён."},"no-schedule")])
    ]})
-  ]},project.id)):n.jsx("p",{children:"Нет проектов с внесёнными этапами или активным строительством."}),
+  ]},project.id)):n.jsx("p",{children:"В каталоге пока нет проектов."}),
   n.jsx("h2",{className:"stage-payment-source-heading",children:"Строки Финансиста для проверки"}),
   sourceList("Этапы и отсрочки из Финансиста",waiting,false),
   sourceList("Нужно сверить договор или график",review,true),
