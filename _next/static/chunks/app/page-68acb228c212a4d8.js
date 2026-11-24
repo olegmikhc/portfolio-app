@@ -919,9 +919,10 @@ Object.assign(spatialUnitLayout,{"0c2a69c7-b5f0-450d-bdce-f26b46140a0a":[5,2,"1"
 function spatialX(u){return spatialUnitLayout[u.id]?.[0]||Number(u.data.positionX)||1}function spatialY(u){return spatialUnitLayout[u.id]?.[1]||Number(u.data.positionY)||1}function spatialFloor(u){return spatialUnitLayout[u.id]?.[2]??String(u.data.floor||"")}function spatialColumns(units){return Math.max(1,...units.map(u=>spatialUnitLayout[u.id]?.[3]||spatialX(u)))}function projectConstructionOverview(project,blocks){const relevant=blocks.filter(b=>b.data.project===project.id),own=project.data.constructionStatus;const completed=own==="Достроено"||(relevant.length>0&&relevant.every(b=>b.data.constructionStatus==="Достроено"));if(completed)return {label:"Построен",tone:"built",icon:"✓"};if(relevant.some(b=>b.data.constructionStatus==="Достроено"))return {label:"Частично построен",tone:"partial",icon:"◐"};if(own==="Строится"||relevant.some(b=>b.data.constructionStatus==="Строится")||[project,...relevant].some(record=>{const text=String(record.data.constructionCompletionText||""),today=new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Makassar"});let match;const dates=/\b(\d{2})\.(\d{2})\.(20\d{2})\b/g;while((match=dates.exec(text)))if(match[3]+"-"+match[2]+"-"+match[1]>=today)return true;const quarters=/\b(IV|III|II|I)\s*квартал\s*(20\d{2})/g;while((match=quarters.exec(text))){const month={I:"03",II:"06",III:"09",IV:"12"}[match[1]];if(match[2]+"-"+month+"-31">=today)return true}return false}))return {label:"Строится",tone:"building",icon:"◷"};return {label:"Статус уточняется",tone:"unknown",icon:"○"}}function projectConstructionBadge(project,blocks){const base=projectConstructionOverview(project,blocks);if(base.tone==="built")return base;const current=projectCurrentConstructionStages[project.id];return {...base,label:current?.label||"Этап уточняется",detail:current?.detail||"В источнике нет однозначно подтверждённого текущего этапа. Плановая дата не определяет фактически выполняемые работы.",icon:current?"◷":"○"}}const constructionKnownCurrent=new Map([
  ["a3e3315e-bf7c-5f50-b0f1-c4ed0b1fc251","Каркас и мезонин"],
  ["11f5b202-ffff-5df4-b802-be3e79009e1b","Кладка стен и инженерные сети"],
- ["f011d16f-1c3c-5cfb-b9ce-2bf63a45bcfc","Кладка стен"]
+ ["f011d16f-1c3c-5cfb-b9ce-2bf63a45bcfc","Кладка стен"],
+ ["d159d657-0fb8-5fa7-8af2-3ca4f66a18f1","Котлован и подготовка фундамента"]
 ]);
-// Current work described in the construction schedule, column F, reviewed 2026-11-23.
+// Current work from the construction schedule and dated construction reports.
 const constructionBlockProgress = new Map([
  ["f3ab2cc8-5d94-465e-8b38-20db6deeeae5", {label:"Виллы", stage:3, work:"Кладка стен"}],
  ["0232bfec-14f5-49ef-922a-c2bc309b7eaf", {label:"Блок A · апартаменты", stage:3, work:"Кладка стен", shared:true}],
@@ -929,7 +930,7 @@ const constructionBlockProgress = new Map([
  ["179e24bb-2be7-4348-89d0-e0b5c89dbbcd", {label:"Виллы", stage:4, work:"Кладка перегородок", note:"В той же записи указаны работы по бассейнам. В графике бассейны относятся к этапу 3."}],
  ["154fb080-504c-486d-bfda-2afc87673892", {label:"Апартаменты", before:1, work:"Расчистка территории и подготовка котлована", shortWork:"Расчистка и котлован"}],
  ["7dcfc4c9-6642-4970-8b6e-8164883180de", {label:"Блок A · смешанный", stage:1, work:"Заливка фундамента"}],
- ["09cba997-2519-4c7e-a88f-d7840aa60571", {label:"Блок B · смешанный"}],
+ ["09cba997-2519-4c7e-a88f-d7840aa60571", {label:"Блок B · смешанный", stage:1, work:"Котлован и подготовка фундамента", shortWork:"Подготовка фундамента", note:"По отчёту за октябрь 2026 готовность котлована и бетонной подготовки составляла по 95%. Оси фундамента размечены.", sourceUrl:"https://loyobondar.com/#construction"}],
  ["1459fa77-042c-4cd1-b602-d8c260603468", {label:"Блок C · виллы", before:1, work:"Земляные работы"}],
  ["b1f7dfe6-1991-4d18-9aa6-0f9147ecb22c", {label:"Блок D · смешанный", before:1, work:"Земляные работы", note:"Запись о работах общая для блоков D и E."}],
  ["ba1ce5f3-fb9e-479b-8206-114ab35ed516", {label:"Блок E · виллы", before:1, work:"Земляные работы", note:"Запись о работах общая для блоков D и E."}],
@@ -1008,7 +1009,8 @@ function ConstructionStageTrigger({project,rows,unit}){
    active&&n.jsxs("p",{className:"construction-stage-context",children:[
     n.jsx("strong",{children:active.details}),
     active.brief.shared&&n.jsx("span",{children:"Графа «Статус» даёт общую запись по апартаментам блоков A и B. В согласованном графике этап 3 отмечен выполненным."}),
-    active.brief.note&&n.jsx("span",{children:active.brief.note})
+    active.brief.note&&n.jsx("span",{children:active.brief.note}),
+    active.brief.sourceUrl&&n.jsx("a",{className:"record-link",href:active.brief.sourceUrl,target:"_blank",rel:"noopener noreferrer",children:"Отчёт о строительстве ↗"})
    ]}),
    n.jsx("div",{className:"construction-stage-groups",children:displayed.length?displayed.map(group=>n.jsxs("section",{className:"construction-stage-group",children:[
     n.jsx("h3",{children:active?active.brief.label:group.label}),
