@@ -995,7 +995,10 @@ function ConstructionStageTrigger({project,rows,unit}){
  },id);
  const triggers=!built&&progress.length?progress.map(({id,brief,details,tone})=>{
   const displayLabel=brief.label.split(" · ")[0];
-  const displayDetails=brief.shortWork?details.replace(brief.work,brief.shortWork):details;
+  const reportedStage=brief.shared?"Этап "+brief.stage+" по работам":"";
+  const displayDetails=reportedStage&&details.startsWith(reportedStage)
+   ?"Работы этапа "+brief.stage+(brief.work==="Кладка стен"?" · Стены":details.slice(reportedStage.length))
+   :brief.shortWork?details.replace(brief.work,brief.shortWork):details;
   return statusButton(id,tone,tone==="building"?"◷":"○",displayLabel+" · "+displayDetails,brief.label+" — "+details);
  }):statusButton("all",built?"built":base.tone,built?"✓":base.icon,label,label+" — этапы строительства "+subject);
  return n.jsxs(n.Fragment,{children:[
