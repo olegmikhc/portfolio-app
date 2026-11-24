@@ -927,7 +927,7 @@ const constructionBlockProgress = new Map([
  ["0232bfec-14f5-49ef-922a-c2bc309b7eaf", {label:"Блок A · апартаменты", stage:3, work:"Кладка стен", shared:true}],
  ["ce21ab6a-d069-4df1-a132-219da5786ad0", {label:"Блок B · смешанный", stage:3, work:"Кладка стен", shared:true}],
  ["179e24bb-2be7-4348-89d0-e0b5c89dbbcd", {label:"Виллы", stage:4, work:"Кладка перегородок", note:"В той же записи указаны работы по бассейнам. В графике бассейны относятся к этапу 3."}],
- ["154fb080-504c-486d-bfda-2afc87673892", {label:"Апартаменты", before:1, work:"Расчистка территории и подготовка котлована"}],
+ ["154fb080-504c-486d-bfda-2afc87673892", {label:"Апартаменты", before:1, work:"Расчистка территории и подготовка котлована", shortWork:"Расчистка и котлован"}],
  ["7dcfc4c9-6642-4970-8b6e-8164883180de", {label:"Блок A · смешанный", stage:1, work:"Заливка фундамента"}],
  ["09cba997-2519-4c7e-a88f-d7840aa60571", {label:"Блок B · смешанный"}],
  ["1459fa77-042c-4cd1-b602-d8c260603468", {label:"Блок C · виллы", before:1, work:"Земляные работы"}],
@@ -988,14 +988,18 @@ function ConstructionStageTrigger({project,rows,unit}){
  const active=progress.find(entry=>entry.id===selected);
  const displayed=active?groups.filter(group=>group.id===active.id):groups;
  const subject=unit?projectFinanceUnitLabel(unit):project.data.name;
+ const statusButton=(id,tone,icon,text,accessibleLabel)=>n.jsxs("button",{
+  type:"button",className:"project-status-chip "+tone,"aria-label":accessibleLabel,
+  "aria-haspopup":"dialog",onClick:()=>setSelected(id),
+  children:[n.jsx("span",{className:"project-status-chip-icon","aria-hidden":true,children:icon}),n.jsx("span",{className:"project-status-chip-label",children:text})]
+ },id);
+ const triggers=!built&&progress.length?progress.map(({id,brief,details,tone})=>{
+  const displayLabel=brief.label.split(" · ")[0];
+  const displayDetails=brief.shortWork?details.replace(brief.work,brief.shortWork):details;
+  return statusButton(id,tone,tone==="building"?"◷":"○",displayLabel+" · "+displayDetails,brief.label+" — "+details);
+ }):statusButton("all",built?"built":base.tone,built?"✓":base.icon,label,label+" — этапы строительства "+subject);
  return n.jsxs(n.Fragment,{children:[
-  !built&&progress.length?n.jsx("div",{className:"project-stage-blocks",children:progress.map(entry=>n.jsxs("button",{
-   type:"button",className:"project-status-chip "+entry.tone,"aria-label":entry.brief.label+" — "+entry.details,
-   "aria-haspopup":"dialog",onClick:()=>setSelected(entry.id),children:[
-    n.jsx("strong",{children:entry.brief.label}),
-    n.jsx("span",{children:entry.details})
-   ]
-  },entry.id))}):n.jsxs("button",{type:"button",className:"project-status-chip "+(built?"built":base.tone),"aria-label":label+" — этапы строительства "+subject,"aria-haspopup":"dialog",onClick:()=>setSelected("all"),children:[n.jsx("span",{"aria-hidden":true,children:built?"✓":base.icon}),label]}),
+  triggers,
   selected!==null&&n.jsx(P,{open:true,onOpenChange:value=>{if(!value)setSelected(null)},children:n.jsxs(K,{className:"construction-stages-dialog",children:[
    n.jsxs(I,{children:[n.jsx(Y,{children:"Этапы строительства · "+subject}),n.jsx(B,{children:unit?project.data.name+(unitBlock?" · "+unitBlock.data.name:""):active?active.brief.label:projectCompletionCaption(project,blocks)})]}),
    active&&n.jsxs("p",{className:"construction-stage-context",children:[
